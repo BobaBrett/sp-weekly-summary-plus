@@ -1,0 +1,291 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weekly Summary Plus</title>
+<style>
+  :root { color-scheme: light dark; --bd: color-mix(in srgb, currentColor 18%, transparent); --mut: color-mix(in srgb, currentColor 60%, transparent); --acc: #4f7cff; --bg2: color-mix(in srgb, currentColor 6%, transparent); }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; font: 14px/1.4 system-ui, sans-serif; background: transparent; color: inherit; }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .bar .sp { flex: 1; }
+  button, select { font: inherit; padding: 5px 10px; border: 1px solid var(--bd); border-radius: 6px; background: var(--bg2); color: inherit; cursor: pointer; }
+  button:hover { border-color: var(--acc); }
+  button.on { background: var(--acc); color: #fff; border-color: var(--acc); }
+  .seg { display: inline-flex; } .seg button { border-radius: 0; margin-left: -1px; } .seg button:first-child { border-radius: 6px 0 0 6px; margin: 0; } .seg button:last-child { border-radius: 0 6px 6px 0; }
+  .range { font-weight: 600; min-width: 190px; text-align: center; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 6px 8px; border-bottom: 1px solid var(--bd); text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; white-space: normal; }
+  th { font-weight: 600; color: var(--mut); font-size: 12px; }
+  tr.g td { font-weight: 600; cursor: pointer; }
+  tr.g:hover td { background: var(--bg2); }
+  tr.t td { color: var(--mut); font-size: 13px; }
+  tr.t td:first-child { padding-left: 28px; }
+  tr.tot td { font-weight: 700; border-top: 2px solid var(--bd); }
+  td.z { color: var(--mut); opacity: .5; }
+  .caret { display: inline-block; width: 14px; color: var(--mut); }
+  .other td:first-child { font-style: italic; }
+  .msg { padding: 24px; text-align: center; color: var(--mut); }
+  .panel { border: 1px solid var(--bd); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+  .panel h2 { font-size: 13px; margin: 0 0 8px; color: var(--mut); text-transform: uppercase; letter-spacing: .04em; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { border: 1px solid var(--bd); border-radius: 999px; padding: 2px 10px; cursor: pointer; user-select: none; }
+  .chip.on { background: var(--acc); border-color: var(--acc); color: #fff; }
+  .grp { border-top: 1px solid var(--bd); padding-top: 10px; margin-top: 10px; }
+  .grp input[type=text] { font: inherit; padding: 4px 8px; border: 1px solid var(--bd); border-radius: 6px; background: transparent; color: inherit; width: 220px; }
+  .lbl { font-size: 12px; color: var(--mut); margin: 8px 0 4px; }
+  .hide { display: none; }
+</style>
+</head>
+<body>
+<h1>Weekly Summary Plus</h1>
+
+<div class="bar">
+  <button id="prev">&larr;</button>
+  <div class="range" id="range"></div>
+  <button id="next">&rarr;</button>
+  <button id="today">This week</button>
+  <span class="sp"></span>
+  <span class="seg" id="modes">
+    <button data-m="tag">By tag</button>
+    <button data-m="project">By project</button>
+    <button data-m="custom">Custom groups</button>
+  </span>
+  <span class="seg" id="fmts">
+    <button data-f="hm">h:mm</button>
+    <button data-f="dec">Decimal</button>
+  </span>
+  <button id="cfgBtn">Configure</button>
+  <button id="copy">Copy TSV</button>
+</div>
+
+<div id="cfg" class="panel hide"></div>
+<div id="out"><div class="msg">Loadingâ€¦</div></div>
+
+<script>const mon=new Date();mon.setDate(mon.getDate()-((mon.getDay()+6)%7));
+const k=i=>{const d=new Date(mon);d.setDate(d.getDate()+i);return d.toISOString().slice(0,10)};
+const H=3600000;
+const tasks=[
+ {id:'a',title:'Fix login bug',tagIds:['INC1'],projectId:'p1',subTaskIds:['a1','a2'],timeSpentOnDay:{[k(0)]:3*H}},
+ {id:'a1',title:'Reproduce',parentId:'a',tagIds:[],subTaskIds:[],timeSpentOnDay:{[k(0)]:1*H}},
+ {id:'a2',title:'Patch',parentId:'a',tagIds:[],subTaskIds:[],timeSpentOnDay:{[k(0)]:2*H}},
+ {id:'b',title:'Outage review',tagIds:['INC2'],projectId:'p1',subTaskIds:[],timeSpentOnDay:{[k(1)]:1.5*H,[k(2)]:H}},
+ {id:'c',title:'Emails',tagIds:[],projectId:'p2',subTaskIds:[],timeSpentOnDay:{[k(1)]:0.5*H}}];
+window.PluginAPI={getTasks:async()=>tasks,getArchivedTasks:async()=>[],
+ getAllTags:async()=>[{id:'INC1',title:'INC-101'},{id:'INC2',title:'INC-102'}],
+ getAllProjects:async()=>[{id:'p1',title:'Platform'},{id:'p2',title:'Admin'}],
+ persistDataSynced:async s=>{window._s=s},loadSyncedData:async()=>window._s||null,showSnack:console.log};
+</script><script>
+(() => {
+  const DAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const OTHER = '__other__';
+  const DEFAULT_CFG = { mode: 'tag', fmt: 'hm', tagIds: [], groups: [] };
+  let cfg = { ...DEFAULT_CFG };
+  let weekStart = mondayOf(new Date());
+  let allTasks = new Map(), tags = [], projects = [];
+  let expanded = new Set(), lastModel = null;
+
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  function mondayOf(d) {
+    const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+    return x;
+  }
+  const dkey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  function weekDays() {
+    return Array.from({ length: 7 }, (_, i) => { const d = new Date(weekStart); d.setDate(d.getDate() + i); return d; });
+  }
+  function fmt(ms) {
+    if (!ms) return 'â€“';
+    if (cfg.fmt === 'dec') return (ms / 3600000).toFixed(2);
+    const m = Math.round(ms / 60000);
+    return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+  }
+
+  // ---------- data ----------
+  async function load() {
+    const [active, archived, t, p] = await Promise.all([
+      PluginAPI.getTasks(), PluginAPI.getArchivedTasks(), PluginAPI.getAllTags(), PluginAPI.getAllProjects(),
+    ]);
+    allTasks = new Map();
+    [...(archived || []), ...(active || [])].forEach(x => allTasks.set(x.id, x));
+    tags = t || []; projects = p || [];
+  }
+
+  // Subtasks usually carry no tags/project of their own: inherit from parent.
+  function effective(task) {
+    const parent = task.parentId ? allTasks.get(task.parentId) : null;
+    return {
+      tagIds: [...new Set([...(task.tagIds || []), ...(parent?.tagIds || [])])],
+      projectId: task.projectId || parent?.projectId || null,
+      parent,
+    };
+  }
+
+  function groupOf(task) {
+    const e = effective(task);
+    if (cfg.mode === 'tag') {
+      const hit = cfg.tagIds.find(id => e.tagIds.includes(id));
+      return hit ? { key: hit, label: tagName(hit) } : { key: OTHER, label: 'Other' };
+    }
+    if (cfg.mode === 'project') {
+      return e.projectId ? { key: e.projectId, label: projName(e.projectId) } : { key: OTHER, label: 'No project' };
+    }
+    const g = cfg.groups.find(g => (g.tagIds || []).some(id => e.tagIds.includes(id)) || (g.projectIds || []).includes(e.projectId));
+    return g ? { key: g.id, label: g.name || '(unnamed)' } : { key: OTHER, label: 'Other' };
+  }
+  const tagName = id => tags.find(t => t.id === id)?.title ?? id;
+  const projName = id => projects.find(p => p.id === id)?.title ?? id;
+
+  function buildModel() {
+    const days = weekDays().map(dkey);
+    const groups = new Map();
+    for (const task of allTasks.values()) {
+      // Parent time is the sum of its subtasks; only count leaf tasks to avoid double counting.
+      if (task.subTaskIds && task.subTaskIds.length) continue;
+      const spent = task.timeSpentOnDay || {};
+      if (!days.some(d => spent[d] > 0)) continue;
+      const g = groupOf(task);
+      if (!groups.has(g.key)) groups.set(g.key, { key: g.key, label: g.label, days: Array(7).fill(0), total: 0, tasks: [] });
+      const grp = groups.get(g.key);
+      const row = { title: task.title, parent: effective(task).parent?.title, days: days.map(d => spent[d] || 0) };
+      row.total = row.days.reduce((a, b) => a + b, 0);
+      row.days.forEach((v, i) => { grp.days[i] += v; });
+      grp.total += row.total;
+      grp.tasks.push(row);
+    }
+    let list = [...groups.values()];
+    const order = cfg.mode === 'tag' ? cfg.tagIds : cfg.mode === 'custom' ? cfg.groups.map(g => g.id) : null;
+    list.sort((a, b) => {
+      if (a.key === OTHER) return 1;
+      if (b.key === OTHER) return -1;
+      if (order) return order.indexOf(a.key) - order.indexOf(b.key);
+      return b.total - a.total;
+    });
+    list.forEach(g => g.tasks.sort((a, b) => b.total - a.total));
+    const totals = Array(7).fill(0);
+    list.forEach(g => g.days.forEach((v, i) => { totals[i] += v; }));
+    return { list, totals, grand: totals.reduce((a, b) => a + b, 0) };
+  }
+
+  // ---------- render ----------
+  function render() {
+    const days = weekDays();
+    $('range').textContent = `${days[0].toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} â€“ ${days[6].toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('on', b.dataset.m === cfg.mode));
+    document.querySelectorAll('#fmts button').forEach(b => b.classList.toggle('on', b.dataset.f === cfg.fmt));
+
+    const m = lastModel = buildModel();
+    if (!m.list.length) { $('out').innerHTML = '<div class="msg">No time tracked this week.</div>'; return; }
+    const hint = cfg.mode === 'tag' && !cfg.tagIds.length
+      ? '<div class="msg">Choose the tags you care about under Configure â€” everything is in "Other" until then.</div>' : '';
+    const head = `<tr><th>Group</th>${days.map((d, i) => `<th>${DAY[i]}<br>${d.getDate()}</th>`).join('')}<th>Total</th></tr>`;
+    const cell = v => `<td class="${v ? '' : 'z'}">${fmt(v)}</td>`;
+    const body = m.list.map(g => {
+      const open = expanded.has(g.key);
+      let h = `<tr class="g ${g.key === OTHER ? 'other' : ''}" data-k="${esc(g.key)}"><td><span class="caret">${open ? 'â–¾' : 'â–¸'}</span>${esc(g.label)}</td>${g.days.map(cell).join('')}<td>${fmt(g.total)}</td></tr>`;
+      if (open) h += g.tasks.map(t => `<tr class="t"><td>${t.parent ? esc(t.parent) + ' â€º ' : ''}${esc(t.title)}</td>${t.days.map(cell).join('')}<td>${fmt(t.total)}</td></tr>`).join('');
+      return h;
+    }).join('');
+    const foot = `<tr class="tot"><td>Total</td>${m.totals.map(cell).join('')}<td>${fmt(m.grand)}</td></tr>`;
+    $('out').innerHTML = `${hint}<table>${head}${body}${foot}</table>`;
+  }
+
+  // ---------- config UI ----------
+  const uid = () => 'g' + Math.random().toString(36).slice(2, 9);
+  function chips(items, selected, attr, extra = '') {
+    return `<div class="chips">${items.map(i => `<span class="chip ${selected.includes(i.id) ? 'on' : ''}" ${attr}="${esc(i.id)}" ${extra}>${esc(i.title)}</span>`).join('')}</div>`;
+  }
+  function renderCfg() {
+    const el = $('cfg');
+    if (cfg.mode === 'tag') {
+      el.innerHTML = `<h2>Tags to report on (priority order = order selected)</h2>${chips(tags, cfg.tagIds, 'data-tag')}
+        <div class="lbl">A task with several selected tags is counted under the first one chosen. Everything else goes under "Other".</div>`;
+    } else if (cfg.mode === 'project') {
+      el.innerHTML = '<h2>Projects</h2><div class="lbl">Every project gets its own row. Nothing to configure.</div>';
+    } else {
+      el.innerHTML = `<h2>Custom groups (first matching group wins)</h2>` + cfg.groups.map((g, gi) => `
+        <div class="grp" data-gi="${gi}">
+          <input type="text" value="${esc(g.name)}" placeholder="Group name" data-name>
+          <button data-up>â†‘</button><button data-down>â†“</button><button data-del>Delete</button>
+          <div class="lbl">Tags</div>${chips(tags, g.tagIds || [], 'data-gtag')}
+          <div class="lbl">Projects</div>${chips(projects, g.projectIds || [], 'data-gproj')}
+        </div>`).join('') + `<div class="grp"><button id="addGrp">+ Add group</button></div>`;
+    }
+  }
+
+  async function save() {
+    try { await PluginAPI.persistDataSynced(JSON.stringify(cfg)); } catch (e) { console.error(e); }
+  }
+  function changed() { save(); render(); renderCfg(); }
+  const toggle = (arr, v) => { const i = arr.indexOf(v); i < 0 ? arr.push(v) : arr.splice(i, 1); };
+
+  $('cfg').addEventListener('click', e => {
+    const t = e.target;
+    if (t.dataset.tag) return toggle(cfg.tagIds, t.dataset.tag), changed();
+    if (t.id === 'addGrp') return cfg.groups.push({ id: uid(), name: '', tagIds: [], projectIds: [] }), changed();
+    const gEl = t.closest('.grp[data-gi]');
+    if (!gEl) return;
+    const gi = +gEl.dataset.gi, g = cfg.groups[gi];
+    if (t.dataset.gtag) { g.tagIds = g.tagIds || []; toggle(g.tagIds, t.dataset.gtag); }
+    else if (t.dataset.gproj) { g.projectIds = g.projectIds || []; toggle(g.projectIds, t.dataset.gproj); }
+    else if (t.hasAttribute('data-del')) cfg.groups.splice(gi, 1);
+    else if (t.hasAttribute('data-up') && gi > 0) [cfg.groups[gi - 1], cfg.groups[gi]] = [cfg.groups[gi], cfg.groups[gi - 1]];
+    else if (t.hasAttribute('data-down') && gi < cfg.groups.length - 1) [cfg.groups[gi + 1], cfg.groups[gi]] = [cfg.groups[gi], cfg.groups[gi + 1]];
+    else return;
+    changed();
+  });
+  $('cfg').addEventListener('input', e => {
+    if (!e.target.hasAttribute('data-name')) return;
+    cfg.groups[+e.target.closest('.grp').dataset.gi].name = e.target.value;
+    save(); render();
+  });
+
+  $('out').addEventListener('click', e => {
+    const tr = e.target.closest('tr.g');
+    if (!tr) return;
+    const k = tr.dataset.k;
+    expanded.has(k) ? expanded.delete(k) : expanded.add(k);
+    render();
+  });
+  $('modes').addEventListener('click', e => { if (e.target.dataset.m) { cfg.mode = e.target.dataset.m; expanded.clear(); save(); render(); renderCfg(); } });
+  $('fmts').addEventListener('click', e => { if (e.target.dataset.f) { cfg.fmt = e.target.dataset.f; save(); render(); } });
+  $('cfgBtn').onclick = () => { renderCfg(); $('cfg').classList.toggle('hide'); };
+  $('prev').onclick = () => { weekStart.setDate(weekStart.getDate() - 7); render(); };
+  $('next').onclick = () => { weekStart.setDate(weekStart.getDate() + 7); render(); };
+  $('today').onclick = () => { weekStart = mondayOf(new Date()); render(); };
+  $('copy').onclick = async () => {
+    if (!lastModel) return;
+    const days = weekDays().map(d => dkey(d));
+    const num = v => (v / 3600000).toFixed(2);
+    const rows = [['Group', ...days, 'Total'], ...lastModel.list.map(g => [g.label, ...g.days.map(num), num(g.total)]), ['Total', ...lastModel.totals.map(num), num(lastModel.grand)]];
+    const tsv = rows.map(r => r.join('\t')).join('\n');
+    try { await navigator.clipboard.writeText(tsv); PluginAPI.showSnack({ msg: 'Copied (decimal hours, tab separated)', type: 'SUCCESS' }); }
+    catch { PluginAPI.showSnack({ msg: 'Clipboard not available', type: 'ERROR' }); }
+  };
+
+  // ---------- init ----------
+  (async () => {
+    try {
+      const saved = await PluginAPI.loadSyncedData();
+      if (saved) cfg = { ...DEFAULT_CFG, ...JSON.parse(saved) };
+      await load();
+      render();
+    } catch (e) {
+      $('out').innerHTML = `<div class="msg">Failed to load: ${esc(e.message || e)}</div>`;
+      console.error(e);
+    }
+  })();
+  // Refresh when the view is revisited so newly tracked time shows up.
+  document.addEventListener('visibilitychange', async () => { if (!document.hidden) { await load(); render(); } });
+})();
+</script>
+</body>
+</html>
+
+
