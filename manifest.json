@@ -1,7 +1,7 @@
 {
   "id": "weekly-summary-plus",
   "name": "Weekly Summary Plus",
-  "version": "0.1.0",
+  "version": "0.1.5",
   "manifestVersion": 1,
   "minSupVersion": "14.0.0",
   "description": "Weekly time summary grouped by chosen tags, projects or custom groups, per day.",
