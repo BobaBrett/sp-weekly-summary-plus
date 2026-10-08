@@ -24,6 +24,9 @@
   tr.g:hover td { background: var(--bg2); }
   tr.t td { color: var(--mut); font-size: 13px; }
   tr.t td:first-child { padding-left: 28px; }
+  tr.t { cursor: pointer; } tr.t:hover td { background: var(--bg2); }
+  tr.d td { text-align: left; padding: 6px 8px 10px 42px; }
+  .chip.ro { cursor: default; font-size: 12px; }
   tr.tot td { font-weight: 700; border-top: 2px solid var(--bd); }
   td.z { color: var(--mut); opacity: .5; }
   .caret { display: inline-block; width: 14px; color: var(--mut); }
@@ -73,7 +76,7 @@
   let cfg = { ...DEFAULT_CFG };
   let weekStart = mondayOf(new Date());
   let allTasks = new Map(), tags = [], projects = [];
-  let expanded = new Set(), lastModel = null;
+  let expanded = new Set(), expandedTasks = new Set(), lastModel = null;
 
   const $ = id => document.getElementById(id);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -140,7 +143,13 @@
       const g = groupOf(task);
       if (!groups.has(g.key)) groups.set(g.key, { key: g.key, label: g.label, days: Array(7).fill(0), total: 0, tasks: [] });
       const grp = groups.get(g.key);
-      const row = { title: task.title, parent: effective(task).parent?.title, days: days.map(d => spent[d] || 0) };
+      const e = effective(task);
+      const row = {
+        id: task.id, title: task.title, parent: e.parent?.title,
+        project: e.projectId ? projName(e.projectId) : 'No project',
+        ownTags: task.tagIds || [], tagIds: e.tagIds,
+        days: days.map(d => spent[d] || 0),
+      };
       row.total = row.days.reduce((a, b) => a + b, 0);
       row.days.forEach((v, i) => { grp.days[i] += v; });
       grp.total += row.total;
@@ -176,7 +185,17 @@
     const body = m.list.map(g => {
       const open = expanded.has(g.key);
       let h = `<tr class="g ${g.key === OTHER ? 'other' : ''}" data-k="${esc(g.key)}"><td><span class="caret">${open ? '▾' : '▸'}</span>${esc(g.label)}</td>${g.days.map(cell).join('')}<td>${fmt(g.total)}</td></tr>`;
-      if (open) h += g.tasks.map(t => `<tr class="t"><td>${t.parent ? esc(t.parent) + ' › ' : ''}${esc(t.title)}</td>${t.days.map(cell).join('')}<td>${fmt(t.total)}</td></tr>`).join('');
+      if (open) h += g.tasks.map(t => {
+        const tOpen = expandedTasks.has(t.id);
+        let r = `<tr class="t" data-t="${esc(t.id)}"><td><span class="caret">${tOpen ? '▾' : '▸'}</span>${esc(t.project)} | ${t.parent ? esc(t.parent) + ' › ' : ''}${esc(t.title)}</td>${t.days.map(cell).join('')}<td>${fmt(t.total)}</td></tr>`;
+        if (tOpen) {
+          const chipsHtml = t.tagIds.length
+            ? t.tagIds.map(id => `<span class="chip on ro" title="${t.ownTags.includes(id) ? 'On this task' : 'Inherited from parent task'}">${esc(tagName(id))}${t.ownTags.includes(id) ? '' : ' ↑'}</span>`).join('')
+            : '<span class="lbl">No tags</span>';
+          r += `<tr class="d"><td colspan="9"><div class="chips">${chipsHtml}</div></td></tr>`;
+        }
+        return r;
+      }).join('');
       return h;
     }).join('');
     const foot = `<tr class="tot"><td>Total</td>${m.totals.map(cell).join('')}<td>${fmt(m.grand)}</td></tr>`;
@@ -234,6 +253,12 @@
   });
 
   $('out').addEventListener('click', e => {
+    const tt = e.target.closest('tr.t');
+    if (tt) {
+      const id = tt.dataset.t;
+      expandedTasks.has(id) ? expandedTasks.delete(id) : expandedTasks.add(id);
+      return render();
+    }
     const tr = e.target.closest('tr.g');
     if (!tr) return;
     const k = tr.dataset.k;
