@@ -24,3 +24,7 @@ grouped by tags you choose, by project, or by your own custom groups, with a per
 3. The `Release` workflow checks the tag matches `manifest.json`, builds the zip and publishes the release.
 
 For local testing, `package.ps1` builds `plugin.zip`; `dev/test.html` runs the UI against mock data.
+
+## License
+
+MIT – see [LICENSE](LICENSE).
